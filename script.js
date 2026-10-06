@@ -1,29 +1,17 @@
 window.requestAnimationFrame =
-    window.__requestAnimationFrame ||
-    window.requestAnimationFrame ||
-    window.webkitRequestAnimationFrame ||
-    window.mozRequestAnimationFrame ||
-    window.oRequestAnimationFrame ||
-    window.msRequestAnimationFrame ||
-    (function () {
-        return function (callback, element) {
-            var lastTime = element.__lastTime;
-            if (lastTime === undefined) {
-                lastTime = 0;
-            }
-            var currTime = Date.now();
-            var timeToCall = Math.max(1, 33 - (currTime - lastTime));
-            window.setTimeout(callback, timeToCall);
-            element.__lastTime = currTime + timeToCall;
-        };
-    })();
+    window.__requestAnimationFrame || window.requestAnimationFrame || window.webkitRequestAnimationFrame ||
+    window.mozRequestAnimationFrame || window.oRequestAnimationFrame || window.msRequestAnimationFrame ||
+    function (callback, element) {
+        var lastTime = element.__lastTime || 0;
+        var currTime = Date.now();
+        var timeToCall = Math.max(1, 33 - (currTime - lastTime));
+        window.setTimeout(callback, timeToCall);
+        element.__lastTime = currTime + timeToCall;
+    };
 
 window.isDevice = (/android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(((navigator.userAgent || navigator.vendor || window.opera)).toLowerCase()));
-var loaded = false;
 
 var init = function () {
-    if (loaded) return;
-    loaded = true;
     var mobile = window.isDevice;
     var koef = mobile ? 0.5 : 1;
     var canvas = document.getElementById('heart');
@@ -31,8 +19,6 @@ var init = function () {
     var width = canvas.width = koef * innerWidth;
     var height = canvas.height = koef * innerHeight;
     var rand = Math.random;
-    ctx.fillStyle = "rgba(0, 0, 0, 1)";
-    ctx.fillRect(0, 0, width, height);
 
     var heartPosition = function (rad) {
         return [Math.pow(Math.sin(rad), 3), -(15 * Math.cos(rad) - 5 * Math.cos(2 * rad) - 2 * Math.cos(3 * rad) - Math.cos(4 * rad))];
@@ -42,131 +28,118 @@ var init = function () {
         return [dx + pos[0] * sx, dy + pos[1] * sy];
     };
 
-    function getTextPoints(text, size) {
-        var tempCanvas = document.createElement('canvas');
-        var tempCtx = tempCanvas.getContext('2d');
-        tempCanvas.width = 600;
-        tempCanvas.height = 200;
-        
-        tempCtx.font = "italic " + size + "px 'Brush Script MT', cursive";
-        tempCtx.fillStyle = "white";
-        tempCtx.textAlign = "center";
-        tempCtx.textBaseline = "middle";
-        tempCtx.fillText(text, tempCanvas.width / 2, tempCanvas.height / 2);
+    // 1. Generate Heart Points
+    var pointsOrigin = [];
+    var dr = mobile ? 0.3 : 0.1;
+    for (var i = 0; i < Math.PI * 2; i += dr) pointsOrigin.push(scaleAndTranslate(heartPosition(i), 150, 9, 0, -80));
+    for (var i = 0; i < Math.PI * 2; i += dr) pointsOrigin.push(scaleAndTranslate(heartPosition(i), 110, 6.5, 0, -80));
+    for (var i = 0; i < Math.PI * 2; i += dr) pointsOrigin.push(scaleAndTranslate(heartPosition(i), 70, 4, 0, -80));
+    var heartCount = pointsOrigin.length;
 
-        var imgData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
-        var pts = [];
-        var step = 7; 
+    // 2. Generate Text Points (Systematic Uniform Sampling to Prevent Clumping)
+    var getTextPoints = function(text, targetCount) {
+        var tc = document.createElement('canvas');
+        var tCtx = tc.getContext('2d', { willReadFrequently: true });
+        tc.width = 800; tc.height = 300;
+        tCtx.font = "italic 110px 'Brush Script MT', cursive";
+        tCtx.fillStyle = "white";
+        tCtx.textAlign = "center";
+        tCtx.textBaseline = "middle";
+        tCtx.fillText(text, tc.width / 2, tc.height / 2);
 
-        for (var y = 0; y < tempCanvas.height; y += step) {
-            for (var x = 0; x < tempCanvas.width; x += step) {
-                var index = (y * tempCanvas.width + x) * 4;
-                if (imgData.data[index + 3] > 120) {
-                    pts.push([x - tempCanvas.width / 2, y - tempCanvas.height / 2]);
-                }
+        var imgData = tCtx.getImageData(0, 0, tc.width, tc.height).data;
+        var validPixels = [];
+        for (var p = 0; p < imgData.length; p += 4) {
+            if (imgData[p + 3] > 128) {
+                var px = (p / 4) % tc.width;
+                var py = Math.floor((p / 4) / tc.width);
+                validPixels.push([px - tc.width / 2, py - tc.height / 2 + 150]);
             }
         }
-        return pts;
-    }
 
-    var pointsOrigin = [];
-    var i;
-    var dr = mobile ? 0.3 : 0.1;
-    
-    for (i = 0; i < Math.PI * 2; i += dr) pointsOrigin.push(scaleAndTranslate(heartPosition(i), 150, 9, 0, -80));
-    for (i = 0; i < Math.PI * 2; i += dr) pointsOrigin.push(scaleAndTranslate(heartPosition(i), 110, 6.5, 0, -80));
-    for (i = 0; i < Math.PI * 2; i += dr) pointsOrigin.push(scaleAndTranslate(heartPosition(i), 70, 4, 0, -80));
-
-    var heartOnlyCount = pointsOrigin.length;
-
-    var nameToPrint = "Sophia"; 
-    var textPoints = getTextPoints(nameToPrint, 90); 
-    
-    for (var p = 0; p < textPoints.length; p++) {
-        pointsOrigin.push([textPoints[p][0], textPoints[p][1] + 160]); 
-    }
-
-    var totalPointsCount = pointsOrigin.length;
-    var targetPoints = [];
-    
-    var pulse = function (kx, ky) {
-        for (i = 0; i < totalPointsCount; i++) {
-            targetPoints[i] = [];
-            var isHeart = (i < heartOnlyCount);
-            var scaleX = isHeart ? kx : 1.0;
-            var scaleY = isHeart ? ky : 1.0;
-            targetPoints[i][0] = scaleX * pointsOrigin[i][0] + width / 2;
-            targetPoints[i][1] = scaleY * pointsOrigin[i][1] + height / 2;
+        var sampledPoints = [];
+        var step = Math.max(1, Math.floor(validPixels.length / targetCount));
+        for (var j = 0; j < validPixels.length && sampledPoints.length < targetCount; j += step) {
+            sampledPoints.push(validPixels[j]);
         }
+        return sampledPoints;
     };
 
+    var textPoints = getTextPoints("Sophia", 250); // Fixed density restricts clumping
+    pointsOrigin = pointsOrigin.concat(textPoints);
+    var totalCount = pointsOrigin.length;
+
+    // 3. Particle System Initialization
+    var targetPoints = [];
     var e = [];
-    var traceCount = mobile ? 15 : 40; 
-    for (i = 0; i < totalPointsCount; i++) {
+    var traceCount = mobile ? 12 : 25;
+
+    for (var i = 0; i < totalCount; i++) {
         var x = rand() * width;
         var y = rand() * height;
         e[i] = {
-            vx: 0,
-            vy: 0,
-            R: 2,
+            vx: 0, vy: 0, R: 2,
             speed: rand() * 3 + 4,
-            q: ~~(rand() * totalPointsCount),
+            q: ~~(rand() * totalCount),
             D: 2 * (i % 2) - 1,
             force: 0.15 * rand() + 0.75,
-            f: "rgba(122, 0, 255, 1)", 
-            trace: []
+            f: "rgba(122, 0, 255, 1)",
+            trace: Array.from({length: traceCount}, () => ({x: x, y: y}))
         };
-        for (var k = 0; k < traceCount; k++) e[i].trace[k] = { x: x, y: y };
     }
 
-    var config = {
-        traceK: 0.35,
-        timeDelta: 0.012
-    };
-
+    var config = { traceK: 0.35, timeDelta: 0.012 };
     var time = 0;
+
+    // 4. Animation Loop
     var loop = function () {
         var n = -Math.cos(time);
-        pulse((1 + n) * .5, (1 + n) * .5);
-        time += ((Math.sin(time)) < 0 ? 9 : (n > 0.8) ? .2 : 1) * config.timeDelta;
-        ctx.fillStyle = "rgba(0,0,0, 0.15)"; 
+        var kx = (1 + n) * 0.5;
+        var ky = (1 + n) * 0.5;
+        time += ((Math.sin(time)) < 0 ? 9 : (n > 0.8) ? 0.2 : 1) * config.timeDelta;
+
+        ctx.fillStyle = "rgba(0,0,0, 0.15)";
         ctx.fillRect(0, 0, width, height);
 
-        for (i = e.length; i--;) {
+        for (var i = 0; i < totalCount; i++) {
+            targetPoints[i] = [
+                (i < heartCount ? kx : 1) * pointsOrigin[i][0] + width / 2,
+                (i < heartCount ? ky : 1) * pointsOrigin[i][1] + height / 2
+            ];
+        }
+
+        for (var i = e.length; i--;) {
             var u = e[i];
             var q = targetPoints[u.q];
             var dx = u.trace[0].x - q[0];
             var dy = u.trace[0].y - q[1];
             var length = Math.sqrt(dx * dx + dy * dy);
+
             if (10 > length) {
-                if (0.95 < rand()) {
-                    u.q = ~~(rand() * totalPointsCount);
-                } else {
-                    if (0.99 < rand()) {
-                        u.D *= -1;
-                    }
-                    u.q += u.D;
-                    u.q %= totalPointsCount;
-                    if (0 > u.q) {
-                        u.q += totalPointsCount;
-                    }
+                if (0.95 < rand()) u.q = ~~(rand() * totalCount);
+                else {
+                    if (0.99 < rand()) u.D *= -1;
+                    u.q = (u.q + u.D + totalCount) % totalCount;
                 }
             }
+
             u.vx += -dx / length * u.speed;
             u.vy += -dy / length * u.speed;
             u.trace[0].x += u.vx;
             u.trace[0].y += u.vy;
             u.vx *= u.force;
             u.vy *= u.force;
-            for (k = 0; k < u.trace.length - 1;) {
+
+            for (var k = 0; k < u.trace.length - 1; k++) {
                 var T = u.trace[k];
-                var N = u.trace[++k];
+                var N = u.trace[k + 1];
                 N.x -= config.traceK * (N.x - T.x);
                 N.y -= config.traceK * (N.y - T.y);
             }
+
             ctx.fillStyle = u.f;
-            for (k = 0; k < u.trace.length; k++) {
-                ctx.fillRect(u.trace[k].x, u.trace[k].y, 2, 2); 
+            for (var k = 0; k < u.trace.length; k++) {
+                ctx.fillRect(u.trace[k].x, u.trace[k].y, 2, 2);
             }
         }
         window.requestAnimationFrame(loop, canvas);
@@ -175,13 +148,10 @@ var init = function () {
     window.addEventListener('resize', function () {
         width = canvas.width = koef * innerWidth;
         height = canvas.height = koef * innerHeight;
-        ctx.fillStyle = "rgba(0, 0, 0, 1)";
-        ctx.fillRect(0, 0, width, height);
     });
 
     loop();
 };
 
-var s = document.readyState;
-if (s === 'complete' || s === 'loaded' || s === 'interactive') init();
+if (document.readyState === 'complete' || document.readyState === 'interactive') init();
 else document.addEventListener('DOMContentLoaded', init, false);
