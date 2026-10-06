@@ -43,7 +43,7 @@ var init = function () {
     window.addEventListener('resize', function () {
         width = canvas.width = koef * innerWidth;
         height = canvas.height = koef * innerHeight;
-        ctx.fillStyle = "rgba(98, 0, 204, 0.9)";
+        ctx.fillStyle = "rgba(122, 0, 255, 1)";
         ctx.fillRect(0, 0, width, height);
     });
 
@@ -130,7 +130,7 @@ var init = function () {
             }
             ctx.fillStyle = u.f;
             for (k = 0; k < u.trace.length; k++) {
-                ctx.fillRect(u.trace[k].x, u.trace[k].y, 1, 1);
+                ctx.fillRect(u.trace[k].x, u.trace[k].y, 2, 2);
             }
         }
         //ctx.fillStyle = "rgba(98, 0, 204, 0.9)";
