@@ -28,7 +28,6 @@ var init = function () {
         return [dx + pos[0] * sx, dy + pos[1] * sy];
     };
 
-    // 1. Generate Heart Points
     var pointsOrigin = [];
     var dr = mobile ? 0.3 : 0.1;
     for (var i = 0; i < Math.PI * 2; i += dr) pointsOrigin.push(scaleAndTranslate(heartPosition(i), 150, 9, 0, -80));
@@ -36,12 +35,14 @@ var init = function () {
     for (var i = 0; i < Math.PI * 2; i += dr) pointsOrigin.push(scaleAndTranslate(heartPosition(i), 70, 4, 0, -80));
     var heartCount = pointsOrigin.length;
 
-    // 2. Generate Text Points (Systematic Uniform Sampling to Prevent Clumping)
     var getTextPoints = function(text, targetCount) {
         var tc = document.createElement('canvas');
         var tCtx = tc.getContext('2d', { willReadFrequently: true });
         tc.width = 800; tc.height = 300;
-        tCtx.font = "italic 110px 'Brush Script MT', cursive";
+        
+        tCtx.fillStyle = "black";
+        tCtx.fillRect(0, 0, tc.width, tc.height);
+        tCtx.font = "italic 110px Arial, sans-serif"; 
         tCtx.fillStyle = "white";
         tCtx.textAlign = "center";
         tCtx.textBaseline = "middle";
@@ -49,13 +50,16 @@ var init = function () {
 
         var imgData = tCtx.getImageData(0, 0, tc.width, tc.height).data;
         var validPixels = [];
+        
         for (var p = 0; p < imgData.length; p += 4) {
-            if (imgData[p + 3] > 128) {
+            if (imgData[p] > 128) { 
                 var px = (p / 4) % tc.width;
                 var py = Math.floor((p / 4) / tc.width);
                 validPixels.push([px - tc.width / 2, py - tc.height / 2 + 150]);
             }
         }
+
+        if (validPixels.length === 0) validPixels.push([0, 150]); 
 
         var sampledPoints = [];
         var step = Math.max(1, Math.floor(validPixels.length / targetCount));
@@ -65,11 +69,10 @@ var init = function () {
         return sampledPoints;
     };
 
-    var textPoints = getTextPoints("Sophia", 250); // Fixed density restricts clumping
+    var textPoints = getTextPoints("Sophia", 250); 
     pointsOrigin = pointsOrigin.concat(textPoints);
     var totalCount = pointsOrigin.length;
 
-    // 3. Particle System Initialization
     var targetPoints = [];
     var e = [];
     var traceCount = mobile ? 12 : 25;
@@ -91,7 +94,6 @@ var init = function () {
     var config = { traceK: 0.35, timeDelta: 0.012 };
     var time = 0;
 
-    // 4. Animation Loop
     var loop = function () {
         var n = -Math.cos(time);
         var kx = (1 + n) * 0.5;
@@ -113,7 +115,9 @@ var init = function () {
             var q = targetPoints[u.q];
             var dx = u.trace[0].x - q[0];
             var dy = u.trace[0].y - q[1];
+            
             var length = Math.sqrt(dx * dx + dy * dy);
+            length = Math.max(0.1, length); 
 
             if (10 > length) {
                 if (0.95 < rand()) u.q = ~~(rand() * totalCount);
