@@ -42,31 +42,57 @@ var init = function () {
         return [dx + pos[0] * sx, dy + pos[1] * sy];
     };
 
-    var pointsOrigin = [];
-    var i;
-    var dr = mobile ? 0.35 : 0.15;
-    
-    // Heart particles
-    for (i = 0; i < Math.PI * 2; i += dr) pointsOrigin.push(scaleAndTranslate(heartPosition(i), 150, 9, 0, -60)); // Offset upward slightly to make space
-    for (i = 0; i < Math.PI * 2; i += dr) pointsOrigin.push(scaleAndTranslate(heartPosition(i), 110, 6.5, 0, -60));
-    for (i = 0; i < Math.PI * 2; i += dr) pointsOrigin.push(scaleAndTranslate(heartPosition(i), 70, 4, 0, -60));
+    function getTextPoints(text, size) {
+        var tempCanvas = document.createElement('canvas');
+        var tempCtx = tempCanvas.getContext('2d');
+        tempCanvas.width = 600;
+        tempCanvas.height = 200;
+        
+        tempCtx.font = "italic " + size + "px 'Brush Script MT', cursive";
+        tempCtx.fillStyle = "white";
+        tempCtx.textAlign = "center";
+        tempCtx.textBaseline = "middle";
+        tempCtx.fillText(text, tempCanvas.width / 2, tempCanvas.height / 2);
 
-    // Get cursive text points underneath
-    var nameToPrint = "Sophia"; // CHANGE THIS NAME HERE
-    var textPoints = getTextPoints(nameToPrint, 60); 
-    
-    // Shift text coordinates so they sit below the heart
-    for (var p = 0; p < textPoints.length; p++) {
-        pointsOrigin.push([textPoints[p][0], textPoints[p][1] + 180]); // Adjusted downwards
+        var imgData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+        var pts = [];
+        var step = 7; 
+
+        for (var y = 0; y < tempCanvas.height; y += step) {
+            for (var x = 0; x < tempCanvas.width; x += step) {
+                var index = (y * tempCanvas.width + x) * 4;
+                if (imgData.data[index + 3] > 120) {
+                    pts.push([x - tempCanvas.width / 2, y - tempCanvas.height / 2]);
+                }
+            }
+        }
+        return pts;
     }
 
-    var heartPointsCount = pointsOrigin.length;
+    var pointsOrigin = [];
+    var i;
+    var dr = mobile ? 0.3 : 0.1;
+    
+    for (i = 0; i < Math.PI * 2; i += dr) pointsOrigin.push(scaleAndTranslate(heartPosition(i), 150, 9, 0, -80));
+    for (i = 0; i < Math.PI * 2; i += dr) pointsOrigin.push(scaleAndTranslate(heartPosition(i), 110, 6.5, 0, -80));
+    for (i = 0; i < Math.PI * 2; i += dr) pointsOrigin.push(scaleAndTranslate(heartPosition(i), 70, 4, 0, -80));
+
+    var heartOnlyCount = pointsOrigin.length;
+
+    var nameToPrint = "Sophia"; 
+    var textPoints = getTextPoints(nameToPrint, 90); 
+    
+    for (var p = 0; p < textPoints.length; p++) {
+        pointsOrigin.push([textPoints[p][0], textPoints[p][1] + 160]); 
+    }
+
+    var totalPointsCount = pointsOrigin.length;
     var targetPoints = [];
+    
     var pulse = function (kx, ky) {
-        for (i = 0; i < pointsOrigin.length; i++) {
+        for (i = 0; i < totalPointsCount; i++) {
             targetPoints[i] = [];
-            // Pulsing only applied to the upper particles (heart-based), static fine cursive details remain legible
-            var isHeart = (i < heartPointsCount - textPoints.length);
+            var isHeart = (i < heartOnlyCount);
             var scaleX = isHeart ? kx : 1.0;
             var scaleY = isHeart ? ky : 1.0;
             targetPoints[i][0] = scaleX * pointsOrigin[i][0] + width / 2;
@@ -75,8 +101,8 @@ var init = function () {
     };
 
     var e = [];
-    var traceCount = mobile ? 12 : 35; // Lower traceCount to keep small cursive letters sharp
-    for (i = 0; i < heartPointsCount; i++) {
+    var traceCount = mobile ? 15 : 40; 
+    for (i = 0; i < totalPointsCount; i++) {
         var x = rand() * width;
         var y = rand() * height;
         e[i] = {
@@ -84,10 +110,10 @@ var init = function () {
             vy: 0,
             R: 2,
             speed: rand() * 3 + 4,
-            q: ~~(rand() * heartPointsCount),
+            q: ~~(rand() * totalPointsCount),
             D: 2 * (i % 2) - 1,
             force: 0.15 * rand() + 0.75,
-            f: "rgba(122, 0, 255, 1)", // Keep it bright purple
+            f: "rgba(122, 0, 255, 1)", 
             trace: []
         };
         for (var k = 0; k < traceCount; k++) e[i].trace[k] = { x: x, y: y };
@@ -103,7 +129,7 @@ var init = function () {
         var n = -Math.cos(time);
         pulse((1 + n) * .5, (1 + n) * .5);
         time += ((Math.sin(time)) < 0 ? 9 : (n > 0.8) ? .2 : 1) * config.timeDelta;
-        ctx.fillStyle = "rgba(0,0,0, 0.15)"; // Leave glowing, fading trails
+        ctx.fillStyle = "rgba(0,0,0, 0.15)"; 
         ctx.fillRect(0, 0, width, height);
 
         for (i = e.length; i--;) {
@@ -114,15 +140,15 @@ var init = function () {
             var length = Math.sqrt(dx * dx + dy * dy);
             if (10 > length) {
                 if (0.95 < rand()) {
-                    u.q = ~~(rand() * heartPointsCount);
+                    u.q = ~~(rand() * totalPointsCount);
                 } else {
                     if (0.99 < rand()) {
                         u.D *= -1;
                     }
                     u.q += u.D;
-                    u.q %= heartPointsCount;
+                    u.q %= totalPointsCount;
                     if (0 > u.q) {
-                        u.q += heartPointsCount;
+                        u.q += totalPointsCount;
                     }
                 }
             }
@@ -140,40 +166,11 @@ var init = function () {
             }
             ctx.fillStyle = u.f;
             for (k = 0; k < u.trace.length; k++) {
-                ctx.fillRect(u.trace[k].x, u.trace[k].y, 2, 2); // Slightly thicker for bright, sharp visibility
+                ctx.fillRect(u.trace[k].x, u.trace[k].y, 2, 2); 
             }
         }
         window.requestAnimationFrame(loop, canvas);
     };
-
-    // Helper to generate precise coordinates from cursive text 
-    function getTextPoints(text, size) {
-        var tempCanvas = document.createElement('canvas');
-        var tempCtx = tempCanvas.getContext('2d');
-        tempCanvas.width = 600;
-        tempCanvas.height = 150;
-        
-        // Beautiful cursive Google font fallback styling
-        tempCtx.font = "italic " + size + "px 'Brush Script MT', 'Dancing Script', 'Alex Brush', cursive";
-        tempCtx.fillStyle = "white";
-        tempCtx.textAlign = "center";
-        tempCtx.textBaseline = "middle";
-        tempCtx.fillText(text, tempCanvas.width / 2, tempCanvas.height / 2);
-
-        var imgData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
-        var pts = [];
-        var step = mobile ? 5 : 3; // Step controls particle density (lower = denser, prettier text)
-
-        for (var y = 0; y < tempCanvas.height; y += step) {
-            for (var x = 0; x < tempCanvas.width; x += step) {
-                var index = (y * tempCanvas.width + x) * 4;
-                if (imgData.data[index + 3] > 120) { // Check if pixel is part of text
-                    pts.push([x - tempCanvas.width / 2, y - tempCanvas.height / 2]);
-                }
-            }
-        }
-        return pts;
-    }
 
     window.addEventListener('resize', function () {
         width = canvas.width = koef * innerWidth;
@@ -184,10 +181,6 @@ var init = function () {
 
     loop();
 };
-
-var s = document.readyState;
-if (s === 'complete' || s === 'loaded' || s === 'interactive') init();
-else document.addEventListener('DOMContentLoaded', init, false);
 
 var s = document.readyState;
 if (s === 'complete' || s === 'loaded' || s === 'interactive') init();
